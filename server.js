@@ -8,7 +8,7 @@ const port = process.env.PORT || 3000;
 // Your secret Gemini API key.
 // For a real deployment on a service like Render, you would set this
 // as an environment variable instead of hardcoding it.
-const GEMINI_API_KEY = "AIzaSyDR4kInKTHbOZsQvMkqZboB41RafnS-vpE";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 // Middleware to parse JSON bodies
 app.use(express.json());
