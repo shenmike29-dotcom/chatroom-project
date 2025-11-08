@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TALKSPIRE - Secure Multi-Room AI Chatroom</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #0f172a; /* Tailwind's slate-900 (Dark Blue Background) */
+            background-attachment: fixed;
+        }
+
+        /* Custom scrollbar styling for the message list (adapted for dark background) */
+        .message-list::-webkit-scrollbar { width: 8px; }
+        .message-list::-webkit-scrollbar-thumb {
+            background-color: rgba(255, 255, 255, 0.5); /* White/translucent thumb */
+            border-radius: 4px;
+        }
+        .message-list::-webkit-scrollbar-track {
+            background: #1f2937; /* Tailwind's gray-800 equivalent for the track */
+        }
+
+        /* --- SUCCESS ANIMATION KEYFRAMES --- */
+        @keyframes checkmark-scale {
+            0% { transform: scale(0); opacity: 0; }
+            60% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); }
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.3); opacity: 0.8; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+        .animate-checkmark { animation: checkmark-scale 0.5s ease-out forwards; }
+        .animate-pulse-ring { animation: pulse-ring 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite; }
+        /* ------------------------------------- */
+
+        /* Added for the typing indicator pulse effect */
+        @keyframes dot-pulse {
+          0%, 80%, 100% { opacity: 0; }
+          40% { opacity: 1; }
+        }
+        .dot-pulse > div:nth-child(1) { animation: dot-pulse 1s infinite; }
+        .dot-pulse > div:nth-child(2) { animation: dot-pulse 1s infinite 0.2s; }
+        .dot-pulse > div:nth-child(3) { animation: dot-pulse 1s infinite 0.4s; }
+
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <!-- Access/Login Modal (Hidden by default) --><div id="access-modal" class="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        
+        <!-- Decorative Container: Wraps the main card for shadow/effect --><div class="w-full max-w-xl relative overflow-hidden rounded-2xl shadow-2xl">
+            
+            <!-- Inner Solid Card (The actual login form container) --><div class="relative bg-gray-800 p-8 sm:p-10 rounded-xl w-full mx-auto transform transition-all duration-300 scale-100 text-white border border-gray-700">
+                
+                <!-- Logo with Lightning Bolt Emoji --><div class="flex items-center justify-center mb-6">
+                    <h2 class="text-3xl font-extrabold text-white tracking-wider flex items-center gap-1.5">
+                        TALK
+                        <!-- Lightning Bolt Emoji for 'S' in talkspire --><span class="text-4xl leading-none" role="img" aria-label="Lightning Bolt">⚡️</span>
+                        SPIRE
+                    </h2>
+                </div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label for="secret-code-input" class="block text-sm font-medium text-white mb-1">Invite Code</label>
+                        <div class="relative">
+                            <input
+                                type="password"
+                                id="secret-code-input"
+                                placeholder="Enter invite code"
+                                class="w-full p-3 pr-10 border border-gray-700 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-gray-900 text-white placeholder-gray-400 shadow-inner transition"
+                                maxlength="50"
+                            >
+                            <!-- Password Visibility Toggle Button --><button type="button" id="toggle-password" class="absolute inset-y-0 right-0 flex items-center pr-3 text-white/70 hover:text-white transition duration-150">
+                                <!-- Icon when password is currently HIDDEN (initial state) -> Show EYE to click to reveal. HIDDEN by default. --><svg id="icon-eye" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye hidden">
+                                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
+                                </svg>
+                                <!-- Icon when password is currently VISIBLE -> Show EYE-OFF to click to hide. VISIBLE by default. --><svg id="icon-eye-off" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye-off">
+                                    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c4.7 0 9.17 2.38 11 7-1.74 4.39-6 6.78-10.26 6.94"/><path d="M2.04 12c1.74 4.39 5.99 6.78 10.25 6.94"/><line x1="2" x2="22" y1="2" y2="22"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="nickname-input" class="block text-sm font-medium text-white mb-1">Your Nickname (Max 10 letters)</label>
+                        <input
+                            type="text"
+                            id="nickname-input"
+                            placeholder="Your Name"
+                            class="w-full p-3 border border-gray-700 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-gray-900 text-white placeholder-gray-400 shadow-inner transition"
+                            maxlength="10"
+                        >
+                    </div>
+                    <!-- Error display area --><div id="auth-error" class="text-red-400 text-sm font-medium h-5"></div>
+                    <!-- Login Button (Kept solid for high contrast) --><button
+                        id="join-button"
+                        class="w-full bg-blue-600 text-white p-3 rounded-xl font-semibold hover:bg-blue-700 transition duration-150 active:scale-[.98] shadow-lg shadow-blue-500/50 flex items-center justify-center gap-2"
+                    >
+                        <!-- Padlock Icon --><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 text-white">
+                            <rect x="3" y="11" width="18" height="11" rx="2"/>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                        Login
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Success Animation Modal --><div id="success-modal" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-700 rounded-xl z-50 transition duration-300 hidden">
+            <!-- Pulsing Ring --><div class="relative">
+                <div class="absolute inset-0 bg-green-400 rounded-full animate-pulse-ring"></div>
+                <!-- Checkmark Circle --><svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white bg-green-600 p-4 rounded-full animate-checkmark relative z-10">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+            </div>
+            <p class="mt-8 text-2xl font-bold text-green-300">Login Successful!</p>
+        </div>
+    </div>
+
+    <!-- Main Chat Container (Solid Dark Theme) --><div id="app" class="hidden w-full max-w-4xl h-[95vh] flex bg-gray-900 rounded-2xl overflow-hidden shadow-2xl">
+
+        <!-- Sidebar for Group Selection (Online Users Removed) --><div class="w-20 sm:w-56 bg-gray-800 p-3 flex flex-col items-center sm:items-stretch gap-3 flex-shrink-0 border-r border-gray-700 overflow-y-auto">
+            
+            <!-- Chats Title --><h2 class="text-lg font-bold text-white hidden sm:block mb-2">Chats</h2>
+            
+            <div id="group-list" class="flex flex-col gap-2 flex-grow">
+                <!-- Group Buttons will be injected here (with online count) -->
+            </div>
+
+            <!-- MADE BY MIKE CREDIT --><div class="mt-auto pt-4 text-center sm:text-left flex-shrink-0 border-t border-gray-700/50">
+                <span class="text-xs text-white font-semibold">Made By Mike</span>
+            </div>
+            <!-- END CREDIT -->
+        </div>
+
+        <!-- Chat Area --><div class="flex-grow flex flex-col min-w-0">
+            <!-- Header (Solid Dark) --><header class="p-3 sm:p-4 bg-gray-700 text-white shadow-lg flex justify-between items-center flex-shrink-0 border-b border-gray-600">
+                <h1 id="current-room-display" class="text-xl sm:text-2xl font-bold tracking-tight truncate">1 ESO C</h1>
+                <div class="flex items-center space-x-2 flex-shrink-0">
+                    <span id="ai-info" class="text-xs bg-yellow-400 text-gray-800 py-1 px-2 rounded-full font-bold shadow-md hidden">AI Assistant Available</span>
+                    <span id="user-display" class="text-sm bg-blue-600 text-white py-1 px-3 rounded-full font-medium shadow-md">Loading...</span>
+                </div>
+            </header>
+            
+            <!-- Typing Indicator Area --><div id="typing-indicator" class="h-6 text-sm px-4 pt-2 text-gray-400 flex items-center">
+                <!-- Typing messages will appear here -->
+            </div>
+
+            <!-- Message List Area (Transparent background) --><div id="message-list" class="message-list flex-grow overflow-y-auto px-4 pt-2 pb-1">
+                <!-- Inner container to help center content on large screens and control max width --><div class="flex flex-col mx-auto max-w-4xl space-y-4"> 
+                    <div id="loading-indicator" class="text-center p-8 text-gray-200">Loading messages...</div>
+                </div>
+            </div>
+
+            <!-- Message Input Area (Solid Dark) --><div class="p-4 border-t border-gray-600 bg-gray-700 flex gap-2 flex-shrink-0">
+                
+                <!-- Emoji Button --><button
+                    id="emoji-button"
+                    class="bg-gray-800 text-yellow-300 p-3 rounded-lg hover:bg-gray-600 transition duration-150 active:scale-[.98] shadow-md flex items-center justify-center"
+                    title="Insert Emoji"
+                >
+                    <span class="text-xl leading-none">😀</span>
+                </button>
+
+                <input
+                    type="text"
+                    id="message-input"
+                    placeholder="Type your message here..."
+                    class="flex-grow p-3 border border-gray-700 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-gray-900 text-white placeholder-gray-400 shadow-inner"
+                    autocomplete="off"
+                    maxlength="500"
+                >
+                <!-- Send/Update Button (Lower Contrast Indigo) --><button
+                    id="send-button"
+                    class="bg-indigo-500 text-white p-3 rounded-lg hover:bg-indigo-400 transition duration-150 active:scale-[.98] shadow-md disabled:bg-indigo-700 flex items-center justify-center min-w-[70px]"
+                    disabled
+                >
+                    <span id="send-button-icon">
+                        <!-- Send Icon -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6">
+                            <path d="m3 3 3 9-3 9 19-9Z"/>
+                            <path d="M6 12h16"/>
+                        </svg>
+                    </span>
+                    <span id="send-button-text" class="hidden font-semibold">Send</span>
+                </button>
+            </div>
+
+            <!-- Citation/System Box (Solid Dark) --><div id="citation-box" class="p-2 text-xs bg-gray-800 text-gray-200 border-t border-gray-700 hidden flex-shrink-0">
+                <!-- Citations will appear here --></div>
+        </div>
+    </div>
+    
+    <!-- Custom Modal for Emoji Picker (Simplified) -->
+    <div id="emoji-modal" class="hidden fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-gray-800 p-6 rounded-xl shadow-2xl border border-gray-700 max-w-sm w-full">
+            <h3 class="text-white text-lg font-bold mb-4 border-b border-gray-700 pb-2">Select an Emoji</h3>
+            <div id="emoji-grid" class="grid grid-cols-6 gap-3 text-2xl">
+                <!-- Emojis are now instant senders -->
+                <button class="emoji-select-btn p-1 rounded hover:bg-gray-700 transition">😀</button>
+                <button class="emoji-select-btn p-1 rounded hover:bg-gray-700 transition">😂</button>
+                <button class="emoji-select-btn p-1 rounded hover:bg-gray-700 transition">👍</button>
+                <button class="emoji-select-btn p-1 rounded hover:bg-gray-700 transition">🔥</button>
+                <button class="emoji-select-btn p-1 rounded hover:bg-gray-700 transition">🎉</button>
+                <button class="emoji-select-btn p-1 rounded hover:bg-gray-700 transition">❤️</button>
+                <button class="emoji-select-btn p-1 rounded hover:bg-gray-700 transition">🤔</button>
+                <button class="emoji-select-btn p-1 rounded hover:bg-gray-700 transition">😎</button>
+                <button class="emoji-select-btn p-1 rounded hover:bg-gray-700 transition">😭</button>
+                <button class="emoji-select-btn p-1 rounded hover:bg-gray-700 transition">🥳</button>
+                <button class="emoji-select-btn p-1 rounded hover:bg-gray-700 transition">☕️</button>
+                <button class="emoji-select-btn p-1 rounded hover:bg-gray-700 transition">💡</button>
+            </div>
+            <button id="close-emoji-modal" class="mt-4 w-full bg-red-600 text-white p-2 rounded-lg hover:bg-red-700 transition">Close</button>
+        </div>
+    </div>
+
+
+    <!-- Firebase SDK Imports & Main Logic --><script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-auth.js";
+        import { getFirestore, collection, doc, deleteDoc, updateDoc, addDoc, onSnapshot, query, orderBy, serverTimestamp, setLogLevel, setDoc, where } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-firestore.js";
+
+        // Set Firebase log level to debug
+        setLogLevel('debug');
+
+        // --- CONFIGURATION ---
+        const SECRET_CODE = "MadebyHibro";
+        const DEFAULT_ROOMS = ["1 ESO C", "AI"];
+        const AI_ROOM_ID = "AI"; // The ID of the room where editing is now disabled
+        const ONLINE_THRESHOLD_MS = 60000; // Users considered online if active in the last 60 seconds
+        const HEARTBEAT_INTERVAL_MS = 30000; // Update presence every 30 seconds
+        
+        // NOTE: appId is determined at runtime by the environment
+        const appId = "1:668115791709:web:ad998268667898c86d42b4";
+        
+        // FIX: Use the actual appId for the public presence path to satisfy security rules.
+        const PRESENCE_COLLECTION_PATH = `/artifacts/${appId}/public/data/group_user_presence`; 
+        
+        // Path used for typing indicator
+        const STATUS_COLLECTION_PATH = `/artifacts/${appId}/public/data/user_status`; 
+
+        // --- GLOBAL STATE ---
+        let db;
+        let auth;
+        let userId = null;
+        let userName = ''; // The 10-letter nickname
+        let currentRoom = DEFAULT_ROOMS[0]; // The current room ID (group only)
+        
+        let isEditing = false; // Is the user currently editing a message?
+        let messageToEditId = null; // ID of the message being edited
+        
+        let unsubscribeMessage = null; // Stores the current message listener
+        let unsubscribeStatus = null; // Stores the typing status listener
+        let unsubscribePresence = null; // Stores the presence listener (for group counts)
+        
+        let usersStatus = {}; // {userId: {userName, currentRoom, isTyping}} - KEPT for typing indicator
+        let groupPresence = {}; // { 'roomName': count }
+        let heartbeatInterval = null; // Interval ID for presence updates
+
+
+        // --- UI Elements ---
+        const accessModal = document.getElementById('access-modal');
+        const successModal = document.getElementById('success-modal'); 
+        const appContainer = document.getElementById('app');
+        const secretCodeInput = document.getElementById('secret-code-input');
+        const nicknameInput = document.getElementById('nickname-input');
+        const joinButton = document.getElementById('join-button');
+        const authError = document.getElementById('auth-error'); 
+        
+        // New elements for password toggle
+        const togglePasswordButton = document.getElementById('toggle-password');
+        const iconEye = document.getElementById('icon-eye');
+        const iconEyeOff = document.getElementById('icon-eye-off');
+
+
+        const userDisplay = document.getElementById('user-display');
+        const currentRoomDisplay = document.getElementById('current-room-display');
+        const aiInfo = document.getElementById('ai-info');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const sendButtonIcon = document.getElementById('send-button-icon');
+        const sendButtonText = document.getElementById('send-button-text');
+        const messageList = document.getElementById('message-list');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const groupList = document.getElementById('group-list');
+        const citationBox = document.getElementById('citation-box');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const emojiModal = document.getElementById('emoji-modal');
+
+        // --- FIREBASE PATHS & HELPERS ---
+
+        /** Generates the path for group chat messages. */
+        function getGroupMessagesPath(roomId) {
+            const safeRoomId = roomId.replace(/\s+/g, '_').toLowerCase();
+            return `/artifacts/${appId}/public/data/rooms/${safeRoomId}/messages`;
+        }
+        
+        /** Generates the path for the user's status document (for Typing status). */
+        function getUserStatusPath(id = userId) {
+            return `${STATUS_COLLECTION_PATH}/${id}`;
+        }
+
+        /** Helper to get the correct message path (now only group chat). */
+        function getCurrentMessagesPath() {
+            return getGroupMessagesPath(currentRoom);
+        }
+
+        // --- FIREBASE AND AUTHENTICATION ---
+
+        /** Updates the user's online status in Firestore (for Typing status). */
+        async function updateStatus(data) {
+            if (!userId || !db) return;
+            try {
+                const statusRef = doc(db, getUserStatusPath());
+                await setDoc(statusRef, { 
+                    userId: userId, 
+                    userName: userName, 
+                    currentRoom: currentRoom, // Always group room ID
+                    lastSeen: serverTimestamp(),
+                    ...data
+                }, { merge: true });
+            } catch (error) {
+                console.error("Error updating user status:", error);
+            }
+        }
+        
+        /** Heartbeat function to update the user's current group presence (for online count). */
+        async function updatePresence() {
+            if (!userId || !db || !userName) return;
+
+            try {
+                const presenceRef = doc(db, PRESENCE_COLLECTION_PATH, userId);
+                await setDoc(presenceRef, {
+                    userId: userId,
+                    userName: userName,
+                    currentRoom: currentRoom, // Always the group room ID
+                    lastActive: serverTimestamp()
+                }, { merge: true });
+            } catch (error) {
+                console.error("Error updating presence:", error);
+            }
+        }
+
+        /** Removes the user's online status on logout/close. */
+        async function removeStatus() {
+            if (!userId || !db) return;
+            try {
+                // Remove from user_status (Typing)
+                await deleteDoc(doc(db, getUserStatusPath()));
+                // Remove from group_user_presence (Group Counts)
+                await deleteDoc(doc(db, PRESENCE_COLLECTION_PATH, userId));
+            } catch (error) {
+                console.error("Error removing user status:", error);
+            }
+        }
+
+        /** Initializes Firebase and authenticates the user. */
+        async function setupFirebase() {
+            try {
+                const firebaseConfig = {
+                    apiKey: "AIzaSyCBpbREwm5c1GninGAEuhoHd7R8XIh-qaY",
+                    authDomain: "mychatapp-1e5ba.firebaseapp.com",
+                    projectId: "mychatapp-1e5ba",
+                    storageBucket: "mychatapp-1e5ba.firebasestorage.app",
+                    messagingSenderId: "668115791709",
+                    appId: "1:668115791709:web:ad998268667898c86d42b4",
+                    measurementId: "G-9ETZ63SQPC"
+                };
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // 1. Authenticate (using token or anonymously)
+                const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                if (token) {
+                    await signInWithCustomToken(auth, token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                // 2. Auth State Listener
+                onAuthStateChanged(auth, (user) => {
+                    userId = user ? user.uid : crypto.randomUUID();
+                    userDisplay.textContent = 'Auth Ready';
+
+                    // Clean up status on window close/reload
+                    window.addEventListener('beforeunload', removeStatus);
+                });
+
+            } catch (error) {
+                console.error("Firebase setup failed:", error);
+                authError.textContent = "Error: Firebase setup failed.";
+            }
+        }
+
+        // --- CHAT LOGIC ---
+
+        /** Utility to format the message text (bold/italic/emojis). */
+        function formatMessageText(text) {
+            // Convert simple markdown to HTML (client-side formatting)
+            text = text.replace(/\*([^\*]+)\*/g, '<strong>$1</strong>'); // *bold*
+            text = text.replace(/_([^_]+)_/g, '<em>$1</em>');       // _italic_
+
+            // Convert common ASCII emojis
+            text = text.replace(/:\)/g, '😊');
+            text = text.replace(/\(:/g, '😞');
+            text = text.replace(/;\)/g, '😉');
+            text = text.replace(/:\D/g, '😢');
+            
+            // Allow HTML rendering
+            return text;
+        }
+
+        /** Renders the typing indicator based on the current room. */
+        function renderTypingIndicator() {
+            const typingUsers = Object.values(usersStatus).filter(user => 
+                user.userId !== userId && user.isTyping && user.currentRoom === currentRoom
+            ).map(user => user.userName);
+
+            typingIndicator.innerHTML = ''; // Clear previous
+
+            if (typingUsers.length > 0) {
+                const names = typingUsers.length > 2
+                    ? `${typingUsers[0]} and ${typingUsers.length - 1} others`
+                    : typingUsers.join(' and ');
+                
+                typingIndicator.innerHTML = `
+                    <div class="flex items-center gap-2 text-white">
+                        <span class="font-semibold text-sm">${names} is typing</span>
+                        <div class="dot-pulse flex items-center gap-1">
+                            <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full"></div>
+                            <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full"></div>
+                            <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full"></div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+
+        /**
+         * Renders a single message element.
+         * @param {Object} msg - The message data object.
+         * @returns {string} - The HTML string for the message.
+         */
+        function renderMessage(msg, docId) {
+            const isUserMessage = msg.userId === userId;
+            const isAiMessage = msg.userId === 'GEMINI_AI_BOT';
+            const isSystemMessage = msg.userId === 'SYSTEM_BOT';
+            
+            if (isSystemMessage) {
+                 return `<div class="text-center text-sm text-white/70 font-mono italic p-1 border-b border-gray-700">${msg.text}</div>`;
+            }
+
+            const alignment = isUserMessage ? 'self-end' : 'self-start';
+            const nameAlignment = isUserMessage ? 'text-right' : 'text-left';
+
+            let bubbleColor = isUserMessage 
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-800/50'
+                : 'bg-gray-700 text-white';
+            let nameColor = isUserMessage ? 'text-blue-400' : 'text-gray-300';
+            let actionButtons = '';
+
+            if (isAiMessage) {
+                bubbleColor = 'bg-cyan-600 text-white shadow-lg shadow-cyan-800/50';
+                nameColor = 'text-cyan-400 font-bold';
+            }
+            
+            // *** CORE LOGIC: Only allow editing if it's the user's message AND NOT the AI room ***
+            const canEdit = isUserMessage && currentRoom !== AI_ROOM_ID;
+
+            if (canEdit) {
+                actionButtons = `
+                    <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        <button class="text-xs text-indigo-200 hover:text-indigo-400" onclick="window.editMessage('${docId}', '${msg.text.replace(/'/g, "\\'")}')">Edit</button>
+                    </div>
+                `;
+            }
+            // *** END CORE LOGIC ***
+
+
+            const timestampText = msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...';
+            const displayName = isUserMessage ? 'You' : msg.userName;
+            
+            // Apply formatting here using the utility function
+            const formattedText = formatMessageText(msg.text);
+            
+            return `
+                <div class="flex flex-col ${alignment} max-w-xs sm:max-w-md group">
+                    <div class="text-xs font-medium mb-1 ${nameColor} ${nameAlignment} flex justify-between items-center ${isUserMessage ? 'flex-row-reverse' : 'flex-row'}">
+                        <span>${displayName}</span>
+                        ${isUserMessage ? actionButtons : ''}
+                    </div>
+                    <div class="${bubbleColor} p-3 rounded-xl break-words">
+                        ${formattedText}
+                        ${msg.isEdited ? '<span class="text-xs opacity-70 ml-2">(edited)</span>' : ''}
+                    </div>
+                    <div class="text-xs text-gray-400 mt-1 ${nameAlignment}">
+                        ${timestampText}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Expose edit/delete to global window for onclick in rendered HTML
+        window.editMessage = (docId, text) => {
+             // Secondary check to ensure we are not editing in the AI room if user somehow bypassed UI
+            if (currentRoom === AI_ROOM_ID) {
+                console.warn("Editing is disabled for the AI group.");
+                return;
+            }
+            
+            messageToEditId = docId;
+            isEditing = true;
+            messageInput.value = text;
+
+            // Change button appearance
+            sendButtonIcon.classList.add('hidden');
+            sendButtonText.textContent = 'Update';
+            sendButtonText.classList.remove('hidden');
+
+            messageInput.focus();
+        };
+
+        /** Writes a system message to a specific room (e.g., for AI errors or loading). */
+        async function writeSystemMessage(roomId, text) {
+            if (!db) return null;
+            try {
+                const path = getGroupMessagesPath(roomId); 
+                const messagesRef = collection(db, path);
+                const docRef = await addDoc(messagesRef, {
+                    userId: 'SYSTEM_BOT',
+                    userName: 'SYSTEM',
+                    text: text,
+                    timestamp: serverTimestamp()
+                });
+                return docRef.id;
+            } catch (error) {
+                console.error("Error writing system message:", error);
+                return null;
+            }
+        }
+
+
+        /** Sends a new message or updates an existing one. */
+        async function sendMessage() {
+            const text = messageInput.value.trim();
+
+            if (!text || !userId || !db || !userName) {
+                console.warn("Cannot send message: Input empty or user/db not initialized.");
+                return;
+            }
+
+            sendButton.disabled = true;
+
+            try {
+                const path = getCurrentMessagesPath();
+                const messagesRef = collection(db, path);
+
+                if (isEditing && messageToEditId) {
+                    // --- EDIT MESSAGE LOGIC ---
+                    const messageRef = doc(db, path, messageToEditId);
+                    await updateDoc(messageRef, {
+                        text: text,
+                        isEdited: true
+                    });
+                    
+                    // Reset editing state
+                    isEditing = false;
+                    messageToEditId = null;
+                    sendButtonIcon.classList.remove('hidden');
+                    sendButtonText.classList.add('hidden');
+
+                } else {
+                    // --- NEW MESSAGE LOGIC ---
+                    await addDoc(messagesRef, {
+                        userId: userId,
+                        userName: userName,
+                        text: text,
+                        timestamp: serverTimestamp()
+                    });
+
+                    // If in the AI room, call the Gemini API
+                    if (currentRoom === AI_ROOM_ID) {
+                        await askGemini(text);
+                    }
+                }
+
+                messageInput.value = '';
+                messageInput.focus();
+
+            } catch (error) {
+                console.error("Error sending/updating message:", error);
+            } finally {
+                sendButton.disabled = false;
+                updateStatus({ isTyping: false }); // Ensure typing indicator is cleared
+                updatePresence(); // Update presence immediately after sending a message
+            }
+        }
+
+        /** Handles typing status update. */
+        let typingTimeout;
+        function handleTyping() {
+            // Update status immediately to true
+            updateStatus({ isTyping: true });
+
+            // Clear previous timeout and set a new one to turn off typing after a delay
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => {
+                updateStatus({ isTyping: false });
+            }, 3000); // 3 seconds timeout
+        }
+
+
+        /** Calls the local backend to proxy the Gemini API request. */
+        async function askGemini(prompt) {
+            const tempMessageId = await writeSystemMessage(AI_ROOM_ID, `Gemini is thinking about your query: "${prompt.substring(0, 50)}..."`);
+
+            try {
+                // Call our own backend server
+                const response = await fetch('/ask-gemini', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: prompt })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server returned status ${response.status}`);
+                }
+
+                const result = await response.json();
+                const candidate = result.candidates?.[0];
+
+                if (candidate && candidate.content?.parts?.[0]?.text) {
+                    // The backend forwards the response, so we process it the same way
+                    if (tempMessageId) {
+                        const tempMessageDocRef = doc(db, getGroupMessagesPath(AI_ROOM_ID), tempMessageId);
+                        try { await deleteDoc(tempMessageDocRef); } catch(e) { console.warn("Could not delete temporary message:", e); }
+                    }
+
+                    let aiResponseText = candidate.content.parts[0].text;
+                    let sources = [];
+                    const groundingMetadata = candidate.groundingMetadata;
+
+                    if (groundingMetadata && groundingMetadata.groundingAttributions && groundingMetadata.groundingAttributions.length > 0) {
+                        sources = groundingMetadata.groundingAttributions
+                            .map((attr, index) => ({ uri: attr.web?.uri, title: attr.web?.title, index: index + 1 }))
+                            .filter(source => source.uri && source.title);
+                        if (sources.length > 0) {
+                            const citationText = sources.map(s => `[${s.index}]`).join('');
+                            aiResponseText += ` ${citationText}`;
+                        }
+                    }
+
+                    const messagesRef = collection(db, getGroupMessagesPath(AI_ROOM_ID));
+                    await addDoc(messagesRef, {
+                        userId: 'GEMINI_AI_BOT',
+                        userName: 'Gemini AI',
+                        text: aiResponseText,
+                        timestamp: serverTimestamp(),
+                        sources: sources
+                    });
+                } else {
+                    throw new Error("API response was valid but contained no text.");
+                }
+            } catch (error) {
+                console.error('Error asking Gemini via backend:', error);
+                if (tempMessageId) {
+                    const tempMessageDocRef = doc(db, getGroupMessagesPath(AI_ROOM_ID), tempMessageId);
+                    await updateDoc(tempMessageDocRef, { text: 'The AI assistant is currently unable to process your request. Please try again later.' });
+                } else {
+                    writeSystemMessage(AI_ROOM_ID, 'The AI assistant is currently unable to process your request. Please try again later.');
+                }
+            }
+        }
+
+        /**
+         * Manages the real-time listener for the current room.
+         */
+        function switchRoom(roomId) {
+            if (unsubscribeMessage) {
+                unsubscribeMessage(); // Stop listening to the previous chat
+            }
+
+            currentRoom = roomId;
+            citationBox.classList.add('hidden'); 
+            citationBox.innerHTML = '';
+            
+            // 1. Update Header
+            currentRoomDisplay.textContent = roomId;
+            aiInfo.classList.toggle('hidden', roomId !== AI_ROOM_ID);
+
+            // 2. Update the user's presence document to reflect the new room immediately
+            updatePresence(); 
+
+            // 3. Clear Message List & Show Loading
+            const msgContainer = messageList.querySelector('.flex-col') || document.createElement('div');
+            msgContainer.className = 'flex flex-col mx-auto max-w-4xl space-y-4';
+            messageList.innerHTML = ''; 
+            messageList.appendChild(msgContainer);
+            msgContainer.innerHTML = `<div id="loading-indicator" class="text-center p-8 text-gray-200">Loading messages...</div>`;
+
+
+            // 4. Update Sidebar Button Styles (Relies on renderGroups being called by presence listener)
+            document.querySelectorAll('.room-button').forEach(btn => {
+                const isActive = btn.dataset.room === roomId;
+                btn.classList.toggle('bg-blue-600', isActive);
+                btn.classList.toggle('text-white', isActive);
+                btn.classList.toggle('bg-gray-700', !isActive);
+                btn.classList.toggle('text-gray-300', !isActive);
+                btn.classList.toggle('border-blue-500', isActive);
+                btn.classList.toggle('border-gray-700', !isActive);
+            });
+
+
+            // 5. Start listening to the new path
+            const path = getCurrentMessagesPath();
+            const messagesRef = collection(db, path);
+            const q = query(messagesRef, orderBy('timestamp'));
+
+            unsubscribeMessage = onSnapshot(q, (snapshot) => {
+                const messagesHtml = [];
+                let latestSources = [];
+
+                snapshot.forEach((doc) => {
+                    const msg = doc.data();
+                    messagesHtml.push(renderMessage(msg, doc.id));
+
+                    // Check for latest Gemini message to display sources
+                    if (roomId === AI_ROOM_ID && msg.userId === 'GEMINI_AI_BOT' && msg.sources && msg.sources.length > 0) {
+                        latestSources = msg.sources;
+                    }
+                });
+
+                const msgContainerInner = messageList.querySelector('.flex-col');
+                if (msgContainerInner) {
+                    msgContainerInner.innerHTML = messagesHtml.join('');
+                    
+                    // Display citations (only for AI chat)
+                    if (roomId === AI_ROOM_ID && latestSources.length > 0) {
+                        citationBox.classList.remove('hidden');
+                        const links = latestSources.map(s =>
+                            `<a href="${s.uri}" target="_blank" class="text-cyan-400 hover:text-cyan-200 underline transition truncate ml-1">${s.title} [${s.index}]</a>`
+                        ).join(', ');
+                        citationBox.innerHTML = `<span class="font-semibold text-gray-300">Sources:</span> ${links}`;
+                    } else {
+                        citationBox.classList.add('hidden');
+                    }
+
+                    requestAnimationFrame(() => {
+                        messageList.scrollTop = messageList.scrollHeight;
+                    });
+                }
+
+
+            }, (error) => {
+                console.error("Error loading messages:", error);
+                const msgContainerInner = messageList.querySelector('.flex-col');
+                if (msgContainerInner) {
+                    msgContainerInner.innerHTML = `<div class="text-center p-8 text-red-400">Failed to load chat history.</div>`;
+                }
+            });
+        }
+        
+
+        // --- USER STATUS & PRESENCE LOGIC ---
+        
+        /** Sets up the listener for group presence to get real-time online counts. */
+        function setupPresenceListener() {
+            if (unsubscribePresence) unsubscribePresence();
+            
+            const presenceRef = collection(db, PRESENCE_COLLECTION_PATH);
+            const q = query(presenceRef); 
+
+            unsubscribePresence = onSnapshot(q, (snapshot) => {
+                const now = Date.now();
+                const counts = {};
+                
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    
+                    // Firestore timestamp conversion and check threshold
+                    const lastActiveTime = data.lastActive ? data.lastActive.toDate().getTime() : 0;
+                    
+                    // Only count users active in the last minute
+                    if (now - lastActiveTime < ONLINE_THRESHOLD_MS) {
+                        const room = data.currentRoom;
+                        counts[room] = (counts[room] || 0) + 1;
+                    }
+                });
+                
+                groupPresence = counts;
+                renderGroups(); // Re-render groups to show new counts
+            }, (error) => {
+                console.error("Error loading presence data for groups:", error);
+            });
+        }
+
+
+        /** Sets up the listener for all active user statuses (used for Typing Indicator). */
+        function setupTypingStatusListener() {
+            if (unsubscribeStatus) {
+                unsubscribeStatus(); // Stop previous listener if needed
+            }
+
+            const statusRef = collection(db, STATUS_COLLECTION_PATH);
+            
+            const q = query(statusRef);
+            
+            unsubscribeStatus = onSnapshot(q, (snapshot) => {
+                usersStatus = {};
+                const now = Date.now();
+                const fiveMinutes = 5 * 60 * 1000;
+                
+                snapshot.forEach((doc) => {
+                    const status = doc.data();
+                    // Basic cleanup: Only consider users active in the last 5 minutes
+                    if (status.lastSeen && (now - status.lastSeen.toDate().getTime() < fiveMinutes)) {
+                        usersStatus[doc.id] = { ...status, userId: doc.id };
+                    }
+                });
+                
+                renderTypingIndicator(); // Re-render typing indicator based on new status
+            }, (error) => {
+                console.error("Error loading user statuses:", error);
+            });
+        }
+
+
+        // --- UI SETUP & EVENT LISTENERS ---
+
+        /** Renders the group selection buttons in the sidebar, including the online count. */
+        function renderGroups() {
+            groupList.innerHTML = DEFAULT_ROOMS.map(room => {
+                const isActive = room === currentRoom;
+                const activeClasses = isActive 
+                    ? 'bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-800/50'
+                    : 'bg-gray-700 text-gray-300 border-gray-700 hover:bg-gray-600';
+                
+                const aiBorder = room === AI_ROOM_ID ? 'border-2 border-cyan-500' : 'border-2 border-gray-700';
+                
+                // Get the real-time online count
+                const count = groupPresence[room] || 0;
+                
+                return `
+                    <button
+                        data-room="${room}"
+                        class="room-button w-full p-2 sm:p-3 rounded-lg font-semibold text-center transition duration-150 active:scale-[.99] shadow-md 
+                        ${activeClasses} ${aiBorder} flex items-center justify-between"
+                    >
+                        <span class="hidden sm:inline truncate">${room}</span>
+                        <span class="sm:hidden text-lg">${room[0]}</span>
+                        
+                        <!-- Online Count Badge -->
+                        <span class="text-xs font-medium px-2 py-0.5 rounded-full ${count > 0 ? 'bg-green-500 text-gray-900' : 'bg-gray-600 text-gray-400'}">
+                            ${count}
+                        </span>
+                    </button>
+                `;
+            }).join('');
+
+            document.querySelectorAll('.room-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    switchRoom(button.dataset.room);
+                });
+            });
+        }
+        
+        /** Toggles the visibility of the secret code input. */
+        function handleTogglePassword() {
+            if (secretCodeInput.type === 'password') {
+                secretCodeInput.type = 'text';
+                iconEye.classList.remove('hidden');
+                iconEyeOff.classList.add('hidden');
+            } else {
+                secretCodeInput.type = 'password';
+                iconEye.classList.add('hidden');
+                iconEyeOff.classList.remove('hidden');
+            }
+        }
+
+
+        /** Validates access code and nickname, then grants access. */
+        function handleJoin() {
+            const code = secretCodeInput.value.trim();
+            const nickname = nicknameInput.value.trim();
+
+            authError.textContent = ''; 
+
+            if (code !== SECRET_CODE) {
+                authError.textContent = 'Incorrect invite code.';
+                return;
+            }
+
+            if (nickname.length === 0 || nickname.length > 10) {
+                authError.textContent = 'Nickname must be 1-10 letters long.';
+                return;
+            }
+
+            // Validation passed!
+            userName = nickname;
+            userDisplay.textContent = userName;
+
+            // 1. Show Success Animation
+            
+            // 2. Start Presence Heartbeat and Listeners
+            updatePresence(); // Initial presence update
+            heartbeatInterval = setInterval(updatePresence, HEARTBEAT_INTERVAL_MS);
+            setupPresenceListener(); // Start listening for group counts
+            setupTypingStatusListener(); // Start listening for typing status
+
+            
+            successModal.classList.remove('hidden');
+            joinButton.disabled = true;
+
+            // 3. Delay the transition to the main app (1.5s for animation)
+            setTimeout(() => {
+                accessModal.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+                sendButton.disabled = false;
+                successModal.classList.add('hidden');
+
+                renderGroups(); 
+                switchRoom(DEFAULT_ROOMS[0]); 
+            }, 1500);
+        }
+
+        /** Sets up all main application event listeners. */
+        function setupEventListeners() {
+            // Access Modal Listeners
+            joinButton.addEventListener('click', handleJoin);
+            secretCodeInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') nicknameInput.focus(); });
+            nicknameInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleJoin(); });
+            
+            // NEW: Add listener for the password toggle button
+            togglePasswordButton.addEventListener('click', handleTogglePassword);
+
+
+            // Chat Functionality Listeners
+            sendButton.addEventListener('click', sendMessage);
+            messageInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+            
+            // Typing Indicator Listener
+            messageInput.addEventListener('input', handleTyping);
+            
+            // Emoji Modal Listeners
+            document.getElementById('emoji-button').addEventListener('click', () => {
+                emojiModal.classList.remove('hidden');
+            });
+            document.getElementById('close-emoji-modal').addEventListener('click', () => {
+                emojiModal.classList.add('hidden');
+            });
+            
+            // --- INSTANT EMOJI SENDING LOGIC ---
+            document.querySelectorAll('.emoji-select-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const emoji = e.target.textContent;
+                    
+                    // 1. Set the input value to the selected emoji
+                    messageInput.value = emoji;
+                    
+                    // 2. Send the message immediately
+                    sendMessage();
+                    
+                    // 3. Hide the modal
+                    emojiModal.classList.add('hidden');
+                });
+            });
+            // --- END INSTANT EMOJI SENDING LOGIC ---
+        }
+
+        // --- Application Initialization ---
+        window.onload = function () {
+            setupFirebase();
+            setupEventListeners();
+        };
+
+    </script>
+</body>
+</html>
